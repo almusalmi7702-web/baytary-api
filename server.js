@@ -6,27 +6,25 @@ const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 
-// --- 1. إعدادات الاتصال الآمنة ---
-// الآن السيرفر لن يعمل إلا إذا وجد المتغير في Railway
+// --- 1. إعدادات الاتصال ---
 const MONGO_URI = process.env.MONGO_URI; 
 const JWT_SECRET = process.env.JWT_SECRET || 'baytary-secure-key-2026';
 
 if (!MONGO_URI) {
   console.error("❌ Error: MONGO_URI is missing in Environment Variables!");
-  process.exit(1); // إيقاف السيرفر إذا لم يوجد الرابط
+  process.exit(1);
 }
 
-// --- الاتصال بقاعدة البيانات ---
 mongoose.connect(MONGO_URI)
   .then(() => console.log("✅ Connected to MongoDB Successfully"))
   .catch(err => console.error("❌ MongoDB Connection Error:", err));
 
-// --- 2. دالة توليد آيدي رقمي قصير (لحل مشكلة فلاتر) ---
-// تنتج رقماً عشوائياً بين 100000 و 999999
+// --- 2. دالة توليد آيدي "رقمي" (String يحتوي على أرقام فقط) ---
+// هذا أهم سطر: ينتج "58293" وليس "abcde" لكي يقبله فلاتر
 const generateId = () => String(Math.floor(100000 + Math.random() * 900000));
 
-// --- 3. تصميم الجداول (Schemas) ---
-// نستخدم _id: String لنتمكن من استخدام دالة generateId
+// --- 3. Mongoose Schemas (التخزين) ---
+// نخزن _id كـ String لكننا سنضع بداخله أرقاماً فقط
 
 const BannerSchema = new mongoose.Schema({
   _id: String,
@@ -48,7 +46,7 @@ const ProductSchema = new mongoose.Schema({
   price: Number,
   description: String,
   images: [String],
-  categoryId: String, 
+  categoryId: String, // سنخزن رقم التصنيف هنا
 });
 const Product = mongoose.model('Product', ProductSchema);
 
@@ -62,7 +60,7 @@ const UserSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', UserSchema);
 
-// --- GraphQL Schema ---
+// --- 4. GraphQL Schema (الواجهة التي يكلمها فلاتر) ---
 const typeDefs = gql`
   enum Role {
     admin
@@ -88,7 +86,8 @@ const typeDefs = gql`
     description: String
     images: [String]
     category: Category
-    categoryId: String
+    # فلاتر يرسل Float، لذا نستقبل ونرجع Float أو Int
+    categoryId: Float 
   }
 
   type User {
@@ -109,6 +108,8 @@ const typeDefs = gql`
     filename: String
   }
 
+  # --- Inputs (المدخلات كما يرسلها فلاتر بالضبط) ---
+
   input BannerInput {
     image: String
     title: String
@@ -126,7 +127,7 @@ const typeDefs = gql`
     title: String
     price: Float
     description: String
-    categoryId: String
+    categoryId: Float # 👈 فلاتر يرسل هذا كرقم، فنستقبله كرقم
     images: [String]
   }
 
@@ -137,7 +138,7 @@ const typeDefs = gql`
 
   type Query {
     banners: [Banner]
-    products(limit: Int, offset: Int, title: String, categoryId: String): [Product]
+    products(limit: Int, offset: Int, title: String, categoryId: Float): [Product]
     product(id: ID!): Product
     categories: [Category]
     category(id: ID!): Category
@@ -171,14 +172,16 @@ const typeDefs = gql`
   scalar Upload
 `;
 
-// --- Resolvers ---
+// --- 5. Resolvers (المنطق) ---
 const resolvers = {
   Query: {
     banners: async () => await Banner.find(),
+    
     products: async (_, { limit, offset, title, categoryId }) => {
       let filter = {};
       if (title) filter.title = { $regex: title, $options: 'i' };
-      if (categoryId) filter.categoryId = categoryId;
+      // نحول الرقم القادم من فلاتر إلى نص للبحث في القاعدة
+      if (categoryId) filter.categoryId = String(categoryId); 
       
       let query = Product.find(filter);
       if (offset !== undefined && limit !== undefined) {
@@ -186,6 +189,7 @@ const resolvers = {
       }
       return await query;
     },
+    
     product: async (_, { id }) => await Product.findById(id),
     categories: async () => await Category.find(),
     category: async (_, { id }) => await Category.findById(id),
@@ -193,7 +197,6 @@ const resolvers = {
     user: async (_, { id }) => await User.findById(id),
     
     myProfile: async () => await User.findOne(), 
-    
     isAvailable: async (_, { email }) => {
       const count = await User.countDocuments({ email });
       return count === 0;
@@ -201,6 +204,9 @@ const resolvers = {
   },
 
   Product: {
+    // نضمن أن categoryId يرجع كرقم لفلاتر
+    categoryId: (parent) => parseFloat(parent.categoryId), 
+    
     category: async (parent) => {
         try {
             return await Category.findById(parent.categoryId);
@@ -215,8 +221,8 @@ const resolvers = {
       const user = await User.findOne({ email, password });
       if (!user) throw new Error('Unauthorized');
       return { 
-        access_token: jwt.sign({ sub: user.id }, JWT_SECRET), 
-        refresh_token: jwt.sign({ sub: user.id }, JWT_SECRET) 
+        access_token: jwt.sign({ sub: user._id }, JWT_SECRET), 
+        refresh_token: jwt.sign({ sub: user._id }, JWT_SECRET) 
       };
     },
 
@@ -245,11 +251,16 @@ const resolvers = {
 
     // --- Products ---
     addProduct: async (_, { data }) => {
-      const product = new Product({ _id: generateId(), ...data });
+      // نحول categoryId (الرقم) إلى نص للتخزين
+      const productData = { ...data, categoryId: String(data.categoryId) };
+      const product = new Product({ _id: generateId(), ...productData });
       return await product.save();
     },
     updateProduct: async (_, { id, changes }) => {
-      return await Product.findByIdAndUpdate(id, changes, { new: true });
+      let updateData = { ...changes };
+      if (changes.categoryId) updateData.categoryId = String(changes.categoryId);
+      
+      return await Product.findByIdAndUpdate(id, updateData, { new: true });
     },
     deleteProduct: async (_, { id }) => {
       await Product.findByIdAndDelete(id);
@@ -282,7 +293,6 @@ async function startServer() {
   await server.start();
   server.applyMiddleware({ app, path: '/graphql' });
 
-  // REST API Endpoints
   app.get('/api/v1/auth/profile', async (req, res) => {
     const user = await User.findOne();
     res.json(user);
