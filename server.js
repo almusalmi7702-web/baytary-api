@@ -6,9 +6,10 @@ const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 
-// --- إعدادات الاتصال ---
-// نستخدم متغير البيئة أو رابط احتياطي (يفضل دائماً استخدام المتغير في Railway)
-const MONGO_URI = process.env.MONGO_URI; 
+// --- 1. إعدادات الاتصال والتعديل ---
+// هذا هو الرابط الخاص بك مع كلمة السر مدمجة
+// يمكنك استخدامه مباشرة هنا، أو وضعه في Railway Variables وهو الأفضل
+const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://admin:Mm770202152@cluster0.x54vprg.mongodb.net/baytary_db?appName=Cluster0";
 const JWT_SECRET = process.env.JWT_SECRET || 'baytary-secure-key-2026';
 
 // --- الاتصال بقاعدة البيانات ---
@@ -16,29 +17,39 @@ mongoose.connect(MONGO_URI)
   .then(() => console.log("✅ Connected to MongoDB Successfully"))
   .catch(err => console.error("❌ MongoDB Connection Error:", err));
 
-// --- تصميم الجداول (Mongoose Schemas) ---
+// --- 2. دالة السحر (توليد آيدي رقمي قصير) ---
+// هذه الدالة تنتج رقماً عشوائياً مثل "17584" لكي يقبله فلاتر بدون مشاكل
+const generateId = () => String(Math.floor(100000 + Math.random() * 900000));
+
+// --- 3. تصميم الجداول (Schemas) ---
+// لاحظ: أضفنا _id: String لنتمكن من وضع الرقم القصير
+
 const BannerSchema = new mongoose.Schema({
+  _id: String, // نستخدم الآيدي الخاص بنا
   image: String,
   title: String
 });
 const Banner = mongoose.model('Banner', BannerSchema);
 
 const CategorySchema = new mongoose.Schema({
+  _id: String,
   name: String,
   image: String
 });
 const Category = mongoose.model('Category', CategorySchema);
 
 const ProductSchema = new mongoose.Schema({
+  _id: String,
   title: String,
   price: Number,
   description: String,
   images: [String],
-  categoryId: String, // سنخزن الآيدي كنص
+  categoryId: String, 
 });
 const Product = mongoose.model('Product', ProductSchema);
 
 const UserSchema = new mongoose.Schema({
+  _id: String,
   name: String,
   email: { type: String, unique: true },
   password: String,
@@ -47,7 +58,8 @@ const UserSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', UserSchema);
 
-// --- GraphQL Schema (Type Definitions) ---
+
+// --- GraphQL Schema (نفس السابق) ---
 const typeDefs = gql`
   enum Role {
     admin
@@ -94,7 +106,6 @@ const typeDefs = gql`
     filename: String
   }
 
-  # Inputs
   input BannerInput {
     image: String
     title: String
@@ -157,14 +168,13 @@ const typeDefs = gql`
   scalar Upload
 `;
 
-// --- Resolvers (المنطق الذي يكلم قاعدة البيانات الحقيقية) ---
+// --- Resolvers (تم التعديل لاستخدام الآيدي القصير) ---
 const resolvers = {
   Query: {
     banners: async () => await Banner.find(),
-    
     products: async (_, { limit, offset, title, categoryId }) => {
       let filter = {};
-      if (title) filter.title = { $regex: title, $options: 'i' }; // بحث ذكي (يحتوي على النص)
+      if (title) filter.title = { $regex: title, $options: 'i' };
       if (categoryId) filter.categoryId = categoryId;
       
       let query = Product.find(filter);
@@ -173,19 +183,12 @@ const resolvers = {
       }
       return await query;
     },
-    
     product: async (_, { id }) => await Product.findById(id),
     categories: async () => await Category.find(),
     category: async (_, { id }) => await Category.findById(id),
     users: async () => await User.find(),
     user: async (_, { id }) => await User.findById(id),
-    
-    // يرجع أول يوزر في القاعدة للتجربة
-    myProfile: async () => {
-        const user = await User.findOne();
-        return user; 
-    },
-    
+    myProfile: async () => await User.findOne(), 
     isAvailable: async (_, { email }) => {
       const count = await User.countDocuments({ email });
       return count === 0;
@@ -193,7 +196,6 @@ const resolvers = {
   },
 
   Product: {
-    // ربط المنتج بالتصنيف الحقيقي
     category: async (parent) => {
         try {
             return await Category.findById(parent.categoryId);
@@ -215,7 +217,8 @@ const resolvers = {
 
     // --- Banners ---
     addBanner: async (_, { data }) => {
-      const banner = new Banner(data);
+      // هنا نضع الآيدي يدوياً (generateId)
+      const banner = new Banner({ _id: generateId(), ...data });
       return await banner.save();
     },
     deleteBanner: async (_, { id }) => {
@@ -228,7 +231,7 @@ const resolvers = {
 
     // --- Users ---
     addUser: async (_, { data }) => {
-      const user = new User(data);
+      const user = new User({ _id: generateId(), ...data });
       return await user.save();
     },
     deleteUser: async (_, { id }) => {
@@ -238,7 +241,7 @@ const resolvers = {
 
     // --- Products ---
     addProduct: async (_, { data }) => {
-      const product = new Product(data);
+      const product = new Product({ _id: generateId(), ...data });
       return await product.save();
     },
     updateProduct: async (_, { id, changes }) => {
@@ -251,7 +254,7 @@ const resolvers = {
 
     // --- Categories ---
     addCategory: async (_, { data }) => {
-      const cat = new Category(data);
+      const cat = new Category({ _id: generateId(), ...data });
       return await cat.save();
     },
     updateCategory: async (_, { id, changes }) => {
@@ -275,7 +278,6 @@ async function startServer() {
   await server.start();
   server.applyMiddleware({ app, path: '/graphql' });
 
-  // REST API (للتوافق مع فلاتر)
   app.get('/api/v1/auth/profile', async (req, res) => {
     const user = await User.findOne();
     res.json(user);
