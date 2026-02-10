@@ -6,26 +6,30 @@ const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 
-// --- 1. إعدادات الاتصال والتعديل ---
-// هذا هو الرابط الخاص بك مع كلمة السر مدمجة
-// يمكنك استخدامه مباشرة هنا، أو وضعه في Railway Variables وهو الأفضل
-const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://admin:Mm770202152@cluster0.x54vprg.mongodb.net/baytary_db?appName=Cluster0";
+// --- 1. إعدادات الاتصال الآمنة ---
+// الآن السيرفر لن يعمل إلا إذا وجد المتغير في Railway
+const MONGO_URI = process.env.MONGO_URI; 
 const JWT_SECRET = process.env.JWT_SECRET || 'baytary-secure-key-2026';
+
+if (!MONGO_URI) {
+  console.error("❌ Error: MONGO_URI is missing in Environment Variables!");
+  process.exit(1); // إيقاف السيرفر إذا لم يوجد الرابط
+}
 
 // --- الاتصال بقاعدة البيانات ---
 mongoose.connect(MONGO_URI)
   .then(() => console.log("✅ Connected to MongoDB Successfully"))
   .catch(err => console.error("❌ MongoDB Connection Error:", err));
 
-// --- 2. دالة السحر (توليد آيدي رقمي قصير) ---
-// هذه الدالة تنتج رقماً عشوائياً مثل "17584" لكي يقبله فلاتر بدون مشاكل
+// --- 2. دالة توليد آيدي رقمي قصير (لحل مشكلة فلاتر) ---
+// تنتج رقماً عشوائياً بين 100000 و 999999
 const generateId = () => String(Math.floor(100000 + Math.random() * 900000));
 
 // --- 3. تصميم الجداول (Schemas) ---
-// لاحظ: أضفنا _id: String لنتمكن من وضع الرقم القصير
+// نستخدم _id: String لنتمكن من استخدام دالة generateId
 
 const BannerSchema = new mongoose.Schema({
-  _id: String, // نستخدم الآيدي الخاص بنا
+  _id: String,
   image: String,
   title: String
 });
@@ -58,8 +62,7 @@ const UserSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', UserSchema);
 
-
-// --- GraphQL Schema (نفس السابق) ---
+// --- GraphQL Schema ---
 const typeDefs = gql`
   enum Role {
     admin
@@ -168,7 +171,7 @@ const typeDefs = gql`
   scalar Upload
 `;
 
-// --- Resolvers (تم التعديل لاستخدام الآيدي القصير) ---
+// --- Resolvers ---
 const resolvers = {
   Query: {
     banners: async () => await Banner.find(),
@@ -188,7 +191,9 @@ const resolvers = {
     category: async (_, { id }) => await Category.findById(id),
     users: async () => await User.find(),
     user: async (_, { id }) => await User.findById(id),
+    
     myProfile: async () => await User.findOne(), 
+    
     isAvailable: async (_, { email }) => {
       const count = await User.countDocuments({ email });
       return count === 0;
@@ -217,7 +222,6 @@ const resolvers = {
 
     // --- Banners ---
     addBanner: async (_, { data }) => {
-      // هنا نضع الآيدي يدوياً (generateId)
       const banner = new Banner({ _id: generateId(), ...data });
       return await banner.save();
     },
@@ -278,6 +282,7 @@ async function startServer() {
   await server.start();
   server.applyMiddleware({ app, path: '/graphql' });
 
+  // REST API Endpoints
   app.get('/api/v1/auth/profile', async (req, res) => {
     const user = await User.findOne();
     res.json(user);
