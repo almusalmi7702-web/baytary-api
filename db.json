@@ -1,49 +1,56 @@
 {
   "products": [
     {
-      "id": 1,
+      "id": "1",
       "title": "لقاح بيطري مخصص",
       "price": 250,
-      "description": "لقاح عالي الجودة.",
+      "description": "لقاح عالي الجودة للوقاية من الأمراض الموسمية للماشية.",
       "images": ["https://placehold.co/600x400"],
+      "categoryId": 1
+    },
+    {
+      "id": "2",
+      "title": "فيتامينات شاملة",
+      "price": 120,
+      "description": "مكمل غذائي لتعزيز المناعة.",
+      "images": ["https://placehold.co/600x400/orange/white"],
       "categoryId": 1
     }
   ],
   "categories": [
     {
-      "id": 1,
-      "name": "أدوية",
-      "image": "https://placehold.co/600x400"
+      "id": "1",
+      "name": "أدوية ولقاحات",
+      "image": "https://placehold.co/600x400/blue/white"
     },
     {
-      "id": 2,
-      "name": "معدات",
-      "image": "https://placehold.co/600x400"
+      "id": "2",
+      "name": "معدات طبية",
+      "image": "https://placehold.co/600x400/green/white"
+    },
+    {
+      "id": "3",
+      "name": "أعلاف ومكملات",
+      "image": "https://placehold.co/600x400/red/white"
     }
   ],
   "users": [
     {
-      "id": 1,
+      "id": "1",
       "name": "Admin User",
-      "email": "admin@baytary.com",
+      "email": "admin@mail.com",
       "password": "123",
       "role": "admin",
       "avatar": "https://i.pravatar.cc/150?u=1"
     },
     {
-      "id": 2,
+      "id": "2",
       "name": "Customer User",
-      "email": "user@baytary.com",
-      "password": "123",
+      "email": "john@mail.com",
+      "password": "changeme",
       "role": "customer",
       "avatar": "https://i.pravatar.cc/150?u=2"
     }
   ],
-  "banners": [
-    {
-      "id": 1,
-      "title": "عرض خاص",
-      "image": "https://placehold.co/1200x400"
-    }
-  ]
+  "refreshTokens": []
 }
