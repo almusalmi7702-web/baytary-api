@@ -15,6 +15,22 @@
       "description": "مكمل غذائي لتعزيز المناعة.",
       "images": ["https://placehold.co/600x400/orange/white"],
       "categoryId": 1
+    },
+    {
+      "id": "3",
+      "title": "معدات جراحية",
+      "price": 1500,
+      "description": "طقم جراحي كامل ستانلس ستيل.",
+      "images": ["https://placehold.co/600x400/red/white"],
+      "categoryId": 2
+    },
+    {
+      "id": "4",
+      "title": "أعلاف مركزة",
+      "price": 50,
+      "description": "أعلاف غنية بالبروتين.",
+      "images": ["https://placehold.co/600x400/green/white"],
+      "categoryId": 3
     }
   ],
   "categories": [
@@ -50,6 +66,18 @@
       "password": "changeme",
       "role": "customer",
       "avatar": "https://i.pravatar.cc/150?u=2"
+    }
+  ],
+  "banners": [
+    {
+      "id": "1",
+      "image": "https://placehold.co/1200x400/blue/white?text=Opening+Offer",
+      "title": "عرض الافتتاح"
+    },
+    {
+      "id": "2",
+      "image": "https://placehold.co/1200x400/red/white?text=Special+Discount",
+      "title": "خصومات خاصة"
     }
   ],
   "refreshTokens": []
