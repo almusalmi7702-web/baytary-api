@@ -4,35 +4,27 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 
-// --- إعدادات الأمان ---
-const JWT_SECRET = 'baytary-secure-key-2026';
+const JWT_SECRET = 'baytary-secret-key-2026';
 
-// --- قاعدة البيانات (محاكية تماماً لما يطلبه تطبيقك) ---
-let db = {
-  products: [
-    { id: "1", title: "لقاح بيطري مخصص", price: 250, description: "لقاح ممتاز للماشية", images: ["https://placehold.co/600x400"], categoryId: 1 },
-    { id: "2", title: "فيتامينات شاملة", price: 120, description: "مكمل غذائي", images: ["https://placehold.co/600x400"], categoryId: 1 },
-    { id: "3", title: "معدات جراحية", price: 500, description: "طقم جراحي كامل", images: ["https://placehold.co/600x400"], categoryId: 2 }
-  ],
-  categories: [
-    { id: "1", name: "أدوية ولقاحات", image: "https://placehold.co/600x400" },
-    { id: "2", name: "معدات طبية", image: "https://placehold.co/600x400" },
-    { id: "3", name: "أعلاف", image: "https://placehold.co/600x400" },
-    { id: "4", name: "اكسسوارات", image: "https://placehold.co/600x400" },
-    { id: "5", name: "عناية", image: "https://placehold.co/600x400" }
-  ],
-  users: [
-    { id: "1", name: "Admin Manager", email: "admin@mail.com", password: "123", role: "admin", avatar: "https://i.pravatar.cc/150?u=1" },
-    { id: "2", name: "Customer One", email: "john@mail.com", password: "changeme", role: "customer", avatar: "https://i.pravatar.cc/150?u=2" }
-  ],
-  banners: [
-    { id: "1", title: "عرض الافتتاح", image: "https://placehold.co/1200x400/blue/white" },
-    { id: "2", title: "خصومات الصيف", image: "https://placehold.co/1200x400/red/white" }
-  ]
-};
+// تحميل قاعدة البيانات
+let db = require('./db.json');
 
-// --- السكيما (مطابقة لملفات الكويري عندك) ---
+// --- المخطط (Schema) ---
 const typeDefs = gql`
+  # 1. تعريف الـ Enum
+  enum Role {
+    admin
+    customer
+  }
+
+  # --- الكيانات (Entities) ---
+  
+  type Banner {
+    id: ID!
+    image: String!
+    title: String # أضفت العنوان احتياطاً لو أردت استخدامه مستقبلاً
+  }
+
   type Category {
     id: ID!
     name: String
@@ -53,15 +45,8 @@ const typeDefs = gql`
     id: ID!
     name: String
     email: String
-    password: String
-    role: String
+    role: Role
     avatar: String
-  }
-  
-  type Banner {
-    id: ID!
-    title: String
-    image: String
   }
 
   type AuthPayload {
@@ -71,6 +56,15 @@ const typeDefs = gql`
 
   type File {
     location: String
+    filename: String
+  }
+
+  # --- المدخلات (Inputs) ---
+  
+  # مدخل البنر (للإضافة والتعديل)
+  input BannerInput {
+    image: String
+    title: String
   }
 
   input UserInput {
@@ -78,14 +72,14 @@ const typeDefs = gql`
     email: String
     password: String
     avatar: String
-    role: String
+    role: Role 
   }
 
   input ProductInput {
     title: String
     price: Float
     description: String
-    categoryId: Int
+    categoryId: Float 
     images: [String]
   }
 
@@ -94,8 +88,13 @@ const typeDefs = gql`
     image: String
   }
 
+  # --- الاستعلامات (Queries) ---
   type Query {
-    products(limit: Int, offset: Int, price_min: Int, price_max: Int, title: String, categoryId: Int): [Product]
+    # استعلام البنرات المستقل
+    banners: [Banner]
+    banner(id: ID!): Banner # لجلب بنر واحد
+
+    products(limit: Int, offset: Int, price_min: Int, price_max: Int, title: String, categoryId: Float): [Product]
     product(id: ID!): Product
     
     categories: [Category]
@@ -104,28 +103,31 @@ const typeDefs = gql`
     users: [User]
     user(id: ID!): User
     
-    banners: [Banner] 
-    
     myProfile: User
     isAvailable(email: String!): Boolean
   }
 
+  # --- التعديلات (Mutations) ---
   type Mutation {
     login(email: String!, password: String!): AuthPayload
     refreshToken(refreshToken: String!): AuthPayload
     
-    # Auth & Users
-    addUser(data: UserInput!): User
-    signUp(data: UserInput!): User  # أضفت لك هذا احتياطاً لو كان اسم الدالة مختلف
-    updateUser(id: ID!, changes: UserInput!): User
-    deleteUser(id: ID!): Boolean
+    # === عمليات البنرات (CRUD كامل) ===
+    addBanner(data: BannerInput!): Banner
+    updateBanner(id: ID!, changes: BannerInput!): Banner
+    deleteBanner(id: ID!): Boolean
+    # =================================
 
-    # Products
+    # المستخدمين
+    addUser(data: UserInput!): User
+    deleteUser(id: ID!): Boolean
+    
+    # المنتجات
     addProduct(data: ProductInput!): Product
     updateProduct(id: ID!, changes: ProductInput!): Product
     deleteProduct(id: ID!): Boolean
 
-    # Categories
+    # التصنيفات
     addCategory(data: CategoryInput!): Category
     updateCategory(id: ID!, changes: CategoryInput!): Category
     deleteCategory(id: ID!): Boolean
@@ -136,13 +138,24 @@ const typeDefs = gql`
   scalar Upload
 `;
 
+// --- المنطق (Resolvers) ---
 const resolvers = {
   Query: {
+    // --- Banners Query ---
+    banners: () => db.banners,
+    banner: (_, { id }) => db.banners.find(b => b.id == id),
+
+    // --- Products Query ---
     products: (_, { limit, offset, title, price_min, price_max, categoryId }) => {
       let data = db.products;
       if (title) data = data.filter(p => p.title.toLowerCase().includes(title.toLowerCase()));
+      if (price_min) data = data.filter(p => p.price >= price_min);
+      if (price_max) data = data.filter(p => p.price <= price_max);
       if (categoryId) data = data.filter(p => p.categoryId == categoryId);
-      if (offset !== undefined && limit !== undefined) return data.slice(offset, offset + limit);
+      
+      if (offset !== undefined && limit !== undefined) {
+        return data.slice(offset, offset + limit);
+      }
       return data;
     },
     product: (_, { id }) => db.products.find(p => p.id == id),
@@ -150,13 +163,15 @@ const resolvers = {
     category: (_, { id }) => db.categories.find(c => c.id == id),
     users: () => db.users,
     user: (_, { id }) => db.users.find(u => u.id == id),
-    banners: () => db.banners, // لدعم getBanners
-    myProfile: () => db.users[0], // يرجع دائماً الأدمن
+    
+    myProfile: () => db.users[0], 
     isAvailable: (_, { email }) => !db.users.some(u => u.email === email)
   },
+
   Product: {
     category: (parent) => db.categories.find(c => c.id == parent.categoryId),
   },
+
   Mutation: {
     login: (_, { email, password }) => {
       const user = db.users.find(u => u.email === email && u.password === password);
@@ -166,51 +181,83 @@ const resolvers = {
         refresh_token: jwt.sign({ sub: user.id }, JWT_SECRET) 
       };
     },
-    refreshToken: () => ({ access_token: "mock-new-token", refresh_token: "mock-new-refresh" }),
-    
-    // Users
+    refreshToken: () => ({ access_token: "new_valid_token", refresh_token: "new_refresh" }),
+
+    // === Banner Mutations Logic ===
+    addBanner: (_, { data }) => {
+      const newBanner = { 
+        id: String(db.banners.length + 1), 
+        image: data.image,
+        title: data.title || ""
+      };
+      db.banners.push(newBanner);
+      return newBanner;
+    },
+    updateBanner: (_, { id, changes }) => {
+      const index = db.banners.findIndex(b => b.id == id);
+      if (index === -1) throw new Error("Banner not found");
+      const updated = { ...db.banners[index], ...changes };
+      db.banners[index] = updated;
+      return updated;
+    },
+    deleteBanner: (_, { id }) => {
+      db.banners = db.banners.filter(b => b.id != id);
+      return true;
+    },
+    // ==============================
+
+    // --- Users ---
     addUser: (_, { data }) => {
-      const newUser = { id: String(db.users.length + 1), role: "customer", ...data };
+      const role = data.role || "customer";
+      const newUser = { id: String(db.users.length + 1), ...data, role };
       db.users.push(newUser);
       return newUser;
     },
-    signUp: (_, { data }) => { // نفس منطق addUser
-      const newUser = { id: String(db.users.length + 1), role: "customer", ...data };
-      db.users.push(newUser);
-      return newUser;
+    deleteUser: (_, { id }) => {
+      db.users = db.users.filter(u => u.id != id);
+      return true;
     },
-    
-    // Products
+
+    // --- Products ---
     addProduct: (_, { data }) => {
-      const newProduct = { id: String(db.products.length + 1), ...data };
+      const newProduct = { 
+        id: String(db.products.length + 1), 
+        ...data,
+        categoryId: parseInt(data.categoryId) 
+      };
       db.products.push(newProduct);
       return newProduct;
+    },
+    updateProduct: (_, { id, changes }) => {
+      const index = db.products.findIndex(p => p.id == id);
+      const updated = { ...db.products[index], ...changes };
+      if (changes.categoryId) updated.categoryId = parseInt(changes.categoryId);
+      db.products[index] = updated;
+      return updated;
     },
     deleteProduct: (_, { id }) => {
       db.products = db.products.filter(p => p.id != id);
       return true;
     },
-    updateProduct: (_, { id, changes }) => {
-       const index = db.products.findIndex(p => p.id == id);
-       db.products[index] = { ...db.products[index], ...changes };
-       return db.products[index];
-    },
 
-    // Categories
+    // --- Categories ---
     addCategory: (_, { data }) => {
       const newCat = { id: String(db.categories.length + 1), ...data };
       db.categories.push(newCat);
       return newCat;
     },
-    deleteCategory: (_, { id }) => {
-      db.categories = db.categories.filter(c => c.id != id);
-      return true;
-    },
     updateCategory: (_, { id, changes }) => {
        const index = db.categories.findIndex(c => c.id == id);
        db.categories[index] = { ...db.categories[index], ...changes };
        return db.categories[index];
-    }
+    },
+    deleteCategory: (_, { id }) => {
+      db.categories = db.categories.filter(c => c.id != id);
+      return true;
+    },
+
+    // --- File Upload ---
+    uploadFile: () => ({ location: "https://placehold.co/600x400", filename: "file.png" })
   }
 };
 
@@ -223,28 +270,14 @@ async function startServer() {
   await server.start();
   server.applyMiddleware({ app, path: '/graphql' });
 
-  // --- REST API Endpoints (للتوافق مع ApiService.dart) ---
-  
-  // 1. Profile Endpoint (Auth/Profile)
-  app.get('/api/v1/auth/profile', (req, res) => {
-    // نرجع بيانات المستخدم رقم 1 دائماً لضمان عمل التطبيق
-    res.json(db.users[0]);
-  });
-
-  // 2. Upload Endpoint (Files/Upload)
-  // يطابق: @POST('/api/v1/files/upload?file')
+  app.get('/api/v1/auth/profile', (req, res) => res.json(db.users[0]));
   app.post('/api/v1/files/upload', (req, res) => {
-    console.log("Upload Request Received");
-    res.json({ 
-      location: "https://placehold.co/600x400", // الرابط الذي ينتظره التطبيق
-      originalname: "file.png",
-      filename: "file.png"
-    });
+    res.json({ location: "https://placehold.co/600x400", filename: "upload.png" });
   });
 
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
-    console.log(`🚀 Baytary Compatible Server running on port ${PORT}`);
+    console.log(`🚀 Baytary Server running on port ${PORT}`);
   });
 }
 
