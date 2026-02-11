@@ -293,9 +293,38 @@ async function startServer() {
   await server.start();
   server.applyMiddleware({ app, path: '/graphql' });
 
+  // ✅ الكود الصحيح (Authentication Middleware Logic)
   app.get('/api/v1/auth/profile', async (req, res) => {
-    const user = await User.findOne();
-    res.json(user);
+    try {
+      // 1. التقاط التوكن من الهيدر
+      const authHeader = req.headers.authorization;
+      if (!authHeader) {
+        return res.status(401).json({ message: 'No token provided' });
+      }
+
+      // التوكن يأتي عادة بصيغة "Bearer <token>"، فنأخذ الجزء الثاني
+      const token = authHeader.split(' ')[1]; 
+      if (!token) {
+        return res.status(401).json({ message: 'Malformed token' });
+      }
+
+      // 2. فك التشفير لمعرفة من هو صاحب التوكن
+      const decoded = jwt.verify(token, JWT_SECRET);
+      
+      // 3. البحث عن المستخدم بـ ID الخاص به (وليس أي مستخدم)
+      const user = await User.findById(decoded.sub); // decoded.sub هو الـ ID
+
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      // 4. إرجاع بيانات المستخدم الصحيح
+      res.json(user);
+
+    } catch (error) {
+      console.error("Profile Error:", error.message);
+      return res.status(401).json({ message: 'Invalid or Expired Token' });
+    }
   });
   
   app.post('/api/v1/files/upload', (req, res) => {
@@ -309,3 +338,4 @@ async function startServer() {
 }
 
 startServer();
+
