@@ -12,8 +12,18 @@ const multer = require('multer');
 const MONGO_URI = process.env.MONGO_URI; 
 const JWT_SECRET = process.env.JWT_SECRET || 'baytary-secure-key-2026';
 
+// 👇👇 [الإضافة هنا] منطقة التشخيص للتأكد من المفاتيح 👇👇
+console.log("-------------------------------------------------");
+console.log("🚀 Starting Server Initialization...");
+console.log("🔑 ImageKit Configuration Status:");
+console.log("   - Public Key: public_zax8vWWMTqNVdzfat9V95KM/8DE=");
+console.log("   - Endpoint: https://ik.imagekit.io/baytary");
+console.log("-------------------------------------------------");
+// 👆👆 انتهت الإضافة 👆👆
+
+// تعريف ImageKit بالمفاتيح المباشرة (لحل المشكلة نهائياً)
 const imagekit = new ImageKit({
-publicKey: "public_zax8vWWMTqNVdzfat9V95KM/8DE=",
+    publicKey: "public_zax8vWWMTqNVdzfat9V95KM/8DE=",
     privateKey: "private_HmDYTDOE9tJYIH/X2esq7N41H8s=",
     urlEndpoint: "https://ik.imagekit.io/baytary"
 });
@@ -189,11 +199,13 @@ async function startServer() {
     app.post('/api/upload', upload.single('file'), async (req, res) => {
         try {
             if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+            
             const result = await imagekit.upload({
                 file: req.file.buffer,
                 fileName: req.file.originalname,
                 folder: "/baytary_uploads"
             });
+            
             res.json({ location: result.url, filename: result.name });
         } catch (error) {
             console.error("ImageKit Error:", error);
@@ -228,4 +240,3 @@ async function startServer() {
 }
 
 startServer();
-
