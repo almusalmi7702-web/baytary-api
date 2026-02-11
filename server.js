@@ -44,7 +44,12 @@ const upload = multer({ storage: storage });
 const generateId = () => String(Math.floor(100000 + Math.random() * 900000));
 
 // --- 2. Mongoose Schemas ---
-const BannerSchema = new mongoose.Schema({ _id: String, image: String, title: String });
+const BannerSchema = new mongoose.Schema({ 
+  _id: String, 
+  image: String, 
+  title: String,
+  productId: String // 👈 هذا الحقل الجديد
+});
 const Banner = mongoose.model('Banner', BannerSchema);
 
 const CategorySchema = new mongoose.Schema({ _id: String, name: String, image: String });
@@ -73,13 +78,13 @@ const User = mongoose.model('User', UserSchema);
 // --- 3. GraphQL Schema ---
 const typeDefs = gql`
     enum Role { admin customer }
-    type Banner { id: ID! image: String title: String }
+    type Banner { id: ID! image: String title: String productId: String }
     type Category { id: ID! name: String image: String }
     type Product { id: ID! title: String price: Float description: String images: [String] category: Category categoryId: Float }
     type User { id: ID! name: String email: String role: Role avatar: String }
     type AuthPayload { access_token: String refresh_token: String }
 
-    input BannerInput { image: String title: String }
+    input BannerInput { image: String title: String productId: String }
     input UserInput { name: String email: String password: String avatar: String role: Role }
     input ProductInput { title: String price: Float description: String categoryId: Float images: [String] }
     input CategoryInput { name: String image: String }
@@ -240,4 +245,5 @@ async function startServer() {
 }
 
 startServer();
+
 
