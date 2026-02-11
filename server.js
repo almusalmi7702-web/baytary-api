@@ -10,6 +10,12 @@ const mongoose = require('mongoose');
 const MONGO_URI = process.env.MONGO_URI; 
 const JWT_SECRET = process.env.JWT_SECRET || 'baytary-secure-key-2026';
 
+const ImageKit = require("imagekit");
+const multer = require('multer');
+const upload = multer();
+
+
+
 if (!MONGO_URI) {
   console.error("❌ Error: MONGO_URI is missing in Environment Variables!");
   process.exit(1);
@@ -18,6 +24,15 @@ if (!MONGO_URI) {
 mongoose.connect(MONGO_URI)
   .then(() => console.log("✅ Connected to MongoDB Successfully"))
   .catch(err => console.error("❌ MongoDB Connection Error:", err));
+
+
+// 1. إعداد ImageKit باستخدام المتغيرات التي حصلت عليها
+// ⚠️ ملاحظة: سنضع القيم الحقيقية في Railway Variables وليس هنا للأمان
+const imagekit = new ImageKit({
+    publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
+    privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
+    urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT
+});
 
 // --- 2. دالة توليد آيدي "رقمي" (String يحتوي على أرقام فقط) ---
 // هذا أهم سطر: ينتج "58293" وليس "abcde" لكي يقبله فلاتر
@@ -327,8 +342,27 @@ async function startServer() {
     }
   });
   
-  app.post('/api/v1/files/upload', (req, res) => {
-    res.json({ location: "https://placehold.co/600x400", filename: "upload.png" });
+  app.post('/api/upload', upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+
+        // الرفع إلى ImageKit
+        const result = await imagekit.upload({
+            file: req.file.buffer, // الملف من الذاكرة
+            fileName: req.file.originalname, // اسم الملف الأصلي
+            folder: "/baytary_uploads" // مجلد خاص في ImageKit
+        });
+
+        // إرجاع الرابط النهائي
+        res.json({ 
+            location: result.url,
+            filename: result.name 
+        });
+
+    } catch (error) {
+        console.error("ImageKit Upload Error:", error);
+        res.status(500).json({ message: "Upload to ImageKit failed" });
+    }
   });
 
   const PORT = process.env.PORT || 3000;
@@ -338,4 +372,5 @@ async function startServer() {
 }
 
 startServer();
+
 
