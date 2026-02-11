@@ -13,9 +13,9 @@ const MONGO_URI = process.env.MONGO_URI;
 const JWT_SECRET = process.env.JWT_SECRET || 'baytary-secure-key-2026';
 
 const imagekit = new ImageKit({
-    publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
-    privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
-    urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT
+publicKey: "public_zax8vWWMTqNVdzfat9V95KM/8DE=",
+    privateKey: "private_HmDYTDOE9tJYIH/X2esq7N41H8s=",
+    urlEndpoint: "https://ik.imagekit.io/baytary"
 });
 
 if (!MONGO_URI) {
@@ -228,3 +228,4 @@ async function startServer() {
 }
 
 startServer();
+
