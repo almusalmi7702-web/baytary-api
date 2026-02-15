@@ -91,7 +91,7 @@ const typeDefs = gql`
 
     type Query {
         banners: [Banner]
-        products(limit: Int, offset: Int, title: String, categoryId: Float): [Product]
+      products(limit: Int, offset: Int, title: String, categoryId: Float, price_min: Int, price_max: Int): [Product]
         product(id: ID!): Product
         categories: [Category]
         category(id: ID!): Category
@@ -125,12 +125,29 @@ const typeDefs = gql`
 const resolvers = {
     Query: {
         banners: async () => await Banner.find(),
-        products: async (_, { limit, offset, title, categoryId }) => {
+products: async (_, { limit, offset, title, categoryId, price_min, price_max }) => {
             let filter = {};
+            
+            // البحث بالاسم
             if (title) filter.title = { $regex: title, $options: 'i' };
+            
+            // البحث بالتصنيف
             if (categoryId) filter.categoryId = String(categoryId); 
+            
+            // 👇👇 [هذه هي الإضافة الجديدة للفلترة بالسعر] 👇👇
+            if (price_min !== undefined || price_max !== undefined) {
+                filter.price = {};
+                // $gte تعني: Greater Than or Equal (أكبر من أو يساوي)
+                if (price_min !== undefined) filter.price.$gte = price_min;
+                // $lte تعني: Less Than or Equal (أصغر من أو يساوي)
+                if (price_max !== undefined) filter.price.$lte = price_max;
+            }
+            // 👆👆 [انتهت الإضافة] 👆👆
+
             let query = Product.find(filter);
+            
             if (offset !== undefined && limit !== undefined) query = query.skip(offset).limit(limit);
+            
             return await query;
         },
         product: async (_, { id }) => await Product.findById(id),
@@ -245,5 +262,6 @@ async function startServer() {
 }
 
 startServer();
+
 
 
