@@ -128,21 +128,18 @@ const resolvers = {
 products: async (_, { limit, offset, title, categoryId, price_min, price_max }) => {
             let filter = {};
             
-            // البحث بالاسم
+            // فلتر الاسم
             if (title) filter.title = { $regex: title, $options: 'i' };
             
-            // البحث بالتصنيف
+            // فلتر التصنيف
             if (categoryId) filter.categoryId = String(categoryId); 
             
-            // 👇👇 [هذه هي الإضافة الجديدة للفلترة بالسعر] 👇👇
-            if (price_min !== undefined || price_max !== undefined) {
+            // ✅ التعديل السحري هنا: استخدمنا != null ليتجاهل الـ null القادم من فلاتر
+            if (price_min != null || price_max != null) {
                 filter.price = {};
-                // $gte تعني: Greater Than or Equal (أكبر من أو يساوي)
-                if (price_min !== undefined) filter.price.$gte = price_min;
-                // $lte تعني: Less Than or Equal (أصغر من أو يساوي)
-                if (price_max !== undefined) filter.price.$lte = price_max;
+                if (price_min != null) filter.price.$gte = price_min;
+                if (price_max != null) filter.price.$lte = price_max;
             }
-            // 👆👆 [انتهت الإضافة] 👆👆
 
             let query = Product.find(filter);
             
@@ -262,6 +259,7 @@ async function startServer() {
 }
 
 startServer();
+
 
 
 
